@@ -1,11 +1,9 @@
-name: Calculator CI-CD Pipeline
+name: Python Calculator CI/CD
 
 on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
 
   pull_request:
     branches:
@@ -16,9 +14,9 @@ permissions:
 
 jobs:
 
-  # Job 1: Test the calculator
+  # JOB 1: Test Calculator
   test:
-    name: Run Calculator Tests
+    name: Test Calculator
     runs-on: ubuntu-latest
 
     steps:
@@ -43,9 +41,10 @@ jobs:
         run: |
           python -m unittest -v test_calculator.py
 
-  # Job 2: Package the application
-  package:
-    name: Package Calculator
+
+  # JOB 2: Deployment Demo
+  deployment-demo:
+    name: Deployment Demo
     needs: test
     runs-on: ubuntu-latest
 
@@ -53,35 +52,32 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create application ZIP
-        run: |
-          python -m zipfile -c calculator.zip calculator.py readme.md
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-      - name: Upload application artifact
+      - name: Verify calculator
+        run: |
+          python -c "from calculator import add, subtract, multiply, divide; assert add(2, 3) == 5; assert subtract(5, 3) == 2; assert multiply(2, 3) == 6; assert divide(6, 3) == 2; print('Calculator verification successful')"
+
+      - name: Prepare deployment package
+        run: |
+          python - <<'PY'
+          from zipfile import ZipFile
+
+          files = ["calculator.py", "readme.md"]
+
+          with ZipFile("calculator-deployment.zip", "w") as archive:
+              for filename in files:
+                  archive.write(filename)
+
+          print("Deployment package created successfully")
+          PY
+
+      - name: Upload deployment artifact
         uses: actions/upload-artifact@v4
         with:
-          name: calculator-${{ github.sha }}
-          path: calculator.zip
+          name: calculator-deployment
+          path: calculator-deployment.zip
           if-no-files-found: error
-
-  # Job 3: Publish a GitHub Release
-  release:
-    name: Publish Calculator Release
-    needs: package
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download application artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: calculator-${{ github.sha }}
-          path: dist
-
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/calculator.zip
