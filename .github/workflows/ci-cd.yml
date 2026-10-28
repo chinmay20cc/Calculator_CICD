@@ -1,0 +1,87 @@
+name: Calculator CI-CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+
+  # Job 1: Test the calculator
+  test:
+    name: Run Calculator Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Check Python syntax
+        run: |
+          python -m compileall -q calculator.py test_calculator.py
+
+      - name: Run unit tests
+        run: |
+          python -m unittest -v test_calculator.py
+
+  # Job 2: Package the application
+  package:
+    name: Package Calculator
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create application ZIP
+        run: |
+          python -m zipfile -c calculator.zip calculator.py readme.md
+
+      - name: Upload application artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: calculator-${{ github.sha }}
+          path: calculator.zip
+          if-no-files-found: error
+
+  # Job 3: Publish a GitHub Release
+  release:
+    name: Publish Calculator Release
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download application artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: calculator-${{ github.sha }}
+          path: dist
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/calculator.zip
